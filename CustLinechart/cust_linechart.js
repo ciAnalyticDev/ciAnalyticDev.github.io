@@ -133,7 +133,7 @@ const parseMetadata = metadata => {
         .append('path')
         .attr('class', 'line')
         .attr('fill', 'none')
-        .attr('stroke', 'black')
+        .attr('stroke', (d, i) => d3.schemeCategory10[i % 10])
         .attr('d', d => line(d.data))
         .attr('transform', `translate(${margin.left}, ${margin.top})`);
     }
