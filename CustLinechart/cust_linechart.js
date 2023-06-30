@@ -102,7 +102,13 @@ const parseMetadata = metadata => {
       }
 
       // Beschriftung nur für den letzten Datenpunkt aktivieren
-      series[series.length - 1].label.show = true;
+      series.forEach((series, index) => {
+        if (index === series.length - 1) {
+          series.label.show = true;
+        } else {
+          series.label.show = false;
+        }
+      });
 
       myChart.setOption(option)
     }
