@@ -1,7 +1,10 @@
 var getScriptPromisify = (src) => {
   return new Promise((resolve) => {
-    $.getScript(src, resolve)
-  })
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload = resolve;
+    document.head.appendChild(script);
+  });
 }
 
 const parseMetadata = metadata => {
@@ -22,11 +25,11 @@ const parseMetadata = metadata => {
 (function () {
   const prepared = document.createElement('template')
   prepared.innerHTML = `
-        <style>
-        </style>
-        <div id="root" style="width: 100%; height: 100%;">
-        </div>
-      `
+    <style>
+    </style>
+    <div id="root" style="width: 100%; height: 100%;">
+    </div>
+  `
   class LineSamplePrepped extends HTMLElement {
     constructor() {
       super()
@@ -51,14 +54,13 @@ const parseMetadata = metadata => {
 
     async render() {
       const dataBinding = this.dataBinding
-      if (!dataBinding || dataBinding.state !== 'success') { return }
-
-      await getScriptPromisify(
-        'https://cdn.staticfile.org/echarts/5.0.0/echarts.min.js'
-      )
+      if (!dataBinding || dataBinding.state !== 'success') {
+        return
+      }
 
       const { data, metadata } = dataBinding
       const { dimensions, measures } = parseMetadata(metadata)
+
       // dimension
       const categoryData = []
 
@@ -66,12 +68,7 @@ const parseMetadata = metadata => {
       const series = measures.map(measure => {
         return {
           data: [],
-          key: measure.key,
-          type: 'line',
-          smooth: true,
-          label: {
-            show: false
-          }
+          key: measure.key
         }
       })
 
@@ -86,31 +83,59 @@ const parseMetadata = metadata => {
         })
       })
 
-      const myChart = echarts.init(this._root, 'main')
-      const option = {
-        xAxis: {
-          type: 'category',
-          data: categoryData
-        },
-        yAxis: {
-          type: 'value'
-        },
-        tooltip: {
-          trigger: 'axis'
-        },
-        series
-      }
+      // Create the SVG element
+      const svgNS = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(svgNS, 'svg');
+      svg.setAttribute('width', '100%');
+      svg.setAttribute('height', '100%');
+      this._root.appendChild(svg);
 
-      // Beschriftung nur für den letzten Datenpunkt aktivieren
-      series.forEach((series, index) => {
-        if (index === series.length - 1) {
-          series.label.show = true;
-        } else {
-          series.label.show = false;
-        }
-      });
+      // Calculate the dimensions and margins
+      const margin = { top: 20, right: 20, bottom: 30, left: 50 };
+      const width = this._root.clientWidth - margin.left - margin.right;
+      const height = this._root.clientHeight - margin.top - margin.bottom;
 
-      myChart.setOption(option)
+      // Create the scales
+      const xScale = d3.scaleBand()
+        .domain(categoryData)
+        .range([0, width])
+        .padding(0.1);
+
+      const yScale = d3.scaleLinear()
+        .domain([0, d3.max(series, d => d3.max(d.data))])
+        .range([height, 0]);
+
+      // Create the axes
+      const xAxis = d3.axisBottom(xScale);
+      const yAxis = d3.axisLeft(yScale);
+
+      // Append the axes to the SVG
+      svg.append('g')
+        .attr('class', 'x-axis')
+        .attr('transform', `translate(${margin.left}, ${height + margin.top})`)
+        .call(xAxis);
+
+      svg.append('g')
+        .attr('class', 'y-axis')
+        .attr('transform', `translate(${margin.left}, ${margin.top})`)
+        .call(yAxis);
+
+      // Create the line generator
+      const line = d3.line()
+        .x((d, i) => xScale(categoryData[i]) + margin.left + xScale.bandwidth() / 2)
+        .y(d => yScale(d))
+        .curve(d3.curveLinear);
+
+      // Append the lines to the SVG
+      svg.selectAll('.line')
+        .data(series)
+        .enter()
+        .append('path')
+        .attr('class', 'line')
+        .attr('fill', 'none')
+        .attr('stroke', (d, i) => d3.schemeCategory10[i % 10])
+        .attr('d', d => line(d.data))
+        .attr('transform', `translate(${margin.left}, ${margin.top})`);
     }
   }
 
